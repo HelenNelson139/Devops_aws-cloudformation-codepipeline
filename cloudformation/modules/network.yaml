@@ -1,0 +1,239 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: NT548 Lab02 network module.
+
+Parameters:
+  ProjectName:
+    Type: String
+  Environment:
+    Type: String
+  VpcCidr:
+    Type: String
+  PublicSubnetCidr:
+    Type: String
+  PrivateSubnetCidr:
+    Type: String
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-vpc
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  ManagedDefaultSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Managed default security group with no ingress rules.
+      GroupName:
+        Fn::Sub: ${ProjectName}-default-sg
+      VpcId:
+        Ref: Vpc
+      SecurityGroupEgress: []
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-default-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock:
+        Ref: PublicSubnetCidr
+      AvailabilityZone:
+        Ref: AvailabilityZone
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-public-subnet
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock:
+        Ref: PrivateSubnetCidr
+      AvailabilityZone:
+        Ref: AvailabilityZone
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-private-subnet
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-igw
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: InternetGateway
+      VpcId:
+        Ref: Vpc
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-nat-eip
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - NatEip
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-nat-gateway
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: Vpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-public-rt
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  PublicRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: Vpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-private-rt
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NatGateway
+
+  PrivateRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable
+      SubnetId:
+        Ref: PrivateSubnet
+
+Outputs:
+  VpcId:
+    Description: VPC ID.
+    Value:
+      Ref: Vpc
+  PublicSubnetId:
+    Description: Public subnet ID.
+    Value:
+      Ref: PublicSubnet
+  PrivateSubnetId:
+    Description: Private subnet ID.
+    Value:
+      Ref: PrivateSubnet
+  NatGatewayId:
+    Description: NAT Gateway ID.
+    Value:
+      Ref: NatGateway
+  InternetGatewayId:
+    Description: Internet Gateway ID.
+    Value:
+      Ref: InternetGateway
+  ManagedDefaultSecurityGroupId:
+    Description: Managed default security group ID.
+    Value:
+      Ref: ManagedDefaultSecurityGroup

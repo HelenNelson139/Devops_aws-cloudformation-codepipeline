@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: NT548 Lab02 security group module.
+
+Parameters:
+  ProjectName:
+    Type: String
+  Environment:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  AllowedSshCidr:
+    Type: String
+
+Resources:
+  PublicEc2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH to public EC2 from configured CIDR.
+      GroupName:
+        Fn::Sub: ${ProjectName}-public-ec2-sg
+      VpcId:
+        Ref: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Ref: AllowedSshCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-public-ec2-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PrivateEc2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH to private EC2 from public EC2 security group.
+      GroupName:
+        Fn::Sub: ${ProjectName}-private-ec2-sg
+      VpcId:
+        Ref: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId:
+            Ref: PublicEc2SecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-private-ec2-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+Outputs:
+  PublicEc2SecurityGroupId:
+    Description: Public EC2 security group ID.
+    Value:
+      Ref: PublicEc2SecurityGroup
+  PrivateEc2SecurityGroupId:
+    Description: Private EC2 security group ID.
+    Value:
+      Ref: PrivateEc2SecurityGroup

@@ -1,0 +1,17 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - python -m pip install --upgrade pip
+      - pip install cfn-lint taskcat
+  build:
+    commands:
+      - cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml
+      - taskcat test run
+
+artifacts:
+  files:
+    - "**/*"

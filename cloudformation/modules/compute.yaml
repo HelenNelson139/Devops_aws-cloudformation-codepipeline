@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: NT548 Lab02 compute module.
+
+Parameters:
+  ProjectName:
+    Type: String
+  Environment:
+    Type: String
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+  PrivateSubnetId:
+    Type: AWS::EC2::Subnet::Id
+  PublicSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  PrivateSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceType:
+    Type: String
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  PublicInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        Ref: AmiId
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - Ref: PublicSecurityGroupId
+          SubnetId:
+            Ref: PublicSubnetId
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-public-ec2
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PublicInstanceEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-public-ec2-eip
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PublicInstanceEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - PublicInstanceEip
+          - AllocationId
+      InstanceId:
+        Ref: PublicInstance
+
+  PrivateInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        Ref: AmiId
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeviceIndex: 0
+          GroupSet:
+            - Ref: PrivateSecurityGroupId
+          SubnetId:
+            Ref: PrivateSubnetId
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-private-ec2
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+Outputs:
+  PublicInstanceId:
+    Description: Public EC2 instance ID.
+    Value:
+      Ref: PublicInstance
+  PublicInstancePublicIp:
+    Description: Elastic IP of the public EC2 instance.
+    Value:
+      Ref: PublicInstanceEip
+  PrivateInstanceId:
+    Description: Private EC2 instance ID.
+    Value:
+      Ref: PrivateInstance
+  PrivateInstancePrivateIp:
+    Description: Private EC2 private IP.
+    Value:
+      Fn::GetAtt:
+        - PrivateInstance
+        - PrivateIp

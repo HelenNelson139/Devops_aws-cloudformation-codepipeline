@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: NT548 Lab02 root stack for modular AWS infrastructure.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: devops-lab02
+  Environment:
+    Type: String
+    Default: lab
+  VpcCidr:
+    Type: String
+    Default: 10.10.0.0/16
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.10.1.0/24
+  PrivateSubnetCidr:
+    Type: String
+    Default: 10.10.2.0/24
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+  AllowedSshCidr:
+    Type: String
+    AllowedPattern: ^(([0-9]{1,3}\.){3}[0-9]{1,3})/([0-9]|[1-2][0-9]|3[0-2])$
+    ConstraintDescription: Must be a valid IPv4 CIDR, for example 203.0.113.10/32.
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceType:
+    Type: String
+    Default: t3.micro
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/network.yaml
+      Parameters:
+        ProjectName:
+          Ref: ProjectName
+        Environment:
+          Ref: Environment
+        VpcCidr:
+          Ref: VpcCidr
+        PublicSubnetCidr:
+          Ref: PublicSubnetCidr
+        PrivateSubnetCidr:
+          Ref: PrivateSubnetCidr
+        AvailabilityZone:
+          Ref: AvailabilityZone
+
+  SecurityStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/security.yaml
+      Parameters:
+        ProjectName:
+          Ref: ProjectName
+        Environment:
+          Ref: Environment
+        VpcId:
+          Fn::GetAtt:
+            - NetworkStack
+            - Outputs.VpcId
+        AllowedSshCidr:
+          Ref: AllowedSshCidr
+
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/compute.yaml
+      Parameters:
+        ProjectName:
+          Ref: ProjectName
+        Environment:
+          Ref: Environment
+        PublicSubnetId:
+          Fn::GetAtt:
+            - NetworkStack
+            - Outputs.PublicSubnetId
+        PrivateSubnetId:
+          Fn::GetAtt:
+            - NetworkStack
+            - Outputs.PrivateSubnetId
+        PublicSecurityGroupId:
+          Fn::GetAtt:
+            - SecurityStack
+            - Outputs.PublicEc2SecurityGroupId
+        PrivateSecurityGroupId:
+          Fn::GetAtt:
+            - SecurityStack
+            - Outputs.PrivateEc2SecurityGroupId
+        KeyName:
+          Ref: KeyName
+        InstanceType:
+          Ref: InstanceType
+
+Outputs:
+  VpcId:
+    Description: Created VPC ID.
+    Value:
+      Fn::GetAtt:
+        - NetworkStack
+        - Outputs.VpcId
+  PublicInstanceId:
+    Description: Public EC2 instance ID.
+    Value:
+      Fn::GetAtt:
+        - ComputeStack
+        - Outputs.PublicInstanceId
+  PublicInstancePublicIp:
+    Description: Public EC2 public IP.
+    Value:
+      Fn::GetAtt:
+        - ComputeStack
+        - Outputs.PublicInstancePublicIp
+  PrivateInstanceId:
+    Description: Private EC2 instance ID.
+    Value:
+      Fn::GetAtt:
+        - ComputeStack
+        - Outputs.PrivateInstanceId
+  PrivateInstancePrivateIp:
+    Description: Private EC2 private IP.
+    Value:
+      Fn::GetAtt:
+        - ComputeStack
+        - Outputs.PrivateInstancePrivateIp

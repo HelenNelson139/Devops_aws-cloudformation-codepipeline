@@ -1,0 +1,18 @@
+project:
+  name: devops-lab02-cloudformation
+  regions:
+    - us-east-1
+
+tests:
+  infrastructure:
+    template: ./cloudformation/root.yaml
+    parameters:
+      ProjectName: devops-lab02-taskcat
+      Environment: lab
+      VpcCidr: 10.20.0.0/16
+      PublicSubnetCidr: 10.20.1.0/24
+      PrivateSubnetCidr: 10.20.2.0/24
+      AvailabilityZone: us-east-1a
+      AllowedSshCidr: 203.0.113.10/32
+      KeyName: "$[taskcat_getkeypair]"
+      InstanceType: t3.micro

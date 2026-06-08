@@ -1,0 +1,345 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: NT548 Lab02 CodeCommit, CodeBuild and CodePipeline for CloudFormation infrastructure delivery.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: devops-lab02
+  Environment:
+    Type: String
+    Default: lab
+  RepositoryName:
+    Type: String
+    Default: devops-lab02-cloudformation-codepipeline
+  BranchName:
+    Type: String
+    Default: main
+  InfraStackName:
+    Type: String
+    Default: devops-lab02-infrastructure
+  VpcCidr:
+    Type: String
+    Default: 10.10.0.0/16
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.10.1.0/24
+  PrivateSubnetCidr:
+    Type: String
+    Default: 10.10.2.0/24
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+  AllowedSshCidr:
+    Type: String
+    AllowedPattern: ^(([0-9]{1,3}\.){3}[0-9]{1,3})/([0-9]|[1-2][0-9]|3[0-2])$
+    ConstraintDescription: Must be a valid IPv4 CIDR, for example 203.0.113.10/32.
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceType:
+    Type: String
+    Default: t3.micro
+
+Resources:
+  SourceRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName:
+        Ref: RepositoryName
+      RepositoryDescription:
+        Fn::Sub: Source repository for ${ProjectName} CloudFormation infrastructure.
+      Tags:
+        - Key: Project
+          Value:
+            Ref: ProjectName
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value:
+            Ref: ProjectName
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: codebuild-cloudformation-delivery
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - ec2:*
+                  - ssm:GetParameter
+                  - iam:PassRole
+                Resource: "*"
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: codepipeline-source-build-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codecommit:CancelUploadArchive
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:GetRepository
+                  - codecommit:GetUploadArchiveStatus
+                  - codecommit:UploadArchive
+                Resource:
+                  Fn::GetAtt:
+                    - SourceRepository
+                    - Arn
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource:
+                  - Fn::GetAtt:
+                      - ValidateProject
+                      - Arn
+                  - Fn::GetAtt:
+                      - DeployProject
+                      - Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketVersioning
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - Fn::GetAtt:
+                      - ArtifactBucket
+                      - Arn
+                  - Fn::Sub: ${ArtifactBucket.Arn}/*
+
+  ValidateProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: ${ProjectName}-validate-cloudformation
+      ServiceRole:
+        Fn::GetAtt:
+          - CodeBuildRole
+          - Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: ci/buildspec-validate.yml
+      TimeoutInMinutes: 60
+      Tags:
+        - Key: Project
+          Value:
+            Ref: ProjectName
+        - Key: Environment
+          Value:
+            Ref: Environment
+
+  DeployProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: ${ProjectName}-deploy-cloudformation
+      ServiceRole:
+        Fn::GetAtt:
+          - CodeBuildRole
+          - Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_BUCKET
+            Type: PLAINTEXT
+            Value:
+              Ref: ArtifactBucket
+          - Name: INFRA_STACK_NAME
+            Type: PLAINTEXT
+            Value:
+              Ref: InfraStackName
+          - Name: PROJECT_NAME
+            Type: PLAINTEXT
+            Value:
+              Ref: ProjectName
+          - Name: ENVIRONMENT
+            Type: PLAINTEXT
+            Value:
+              Ref: Environment
+          - Name: VPC_CIDR
+            Type: PLAINTEXT
+            Value:
+              Ref: VpcCidr
+          - Name: PUBLIC_SUBNET_CIDR
+            Type: PLAINTEXT
+            Value:
+              Ref: PublicSubnetCidr
+          - Name: PRIVATE_SUBNET_CIDR
+            Type: PLAINTEXT
+            Value:
+              Ref: PrivateSubnetCidr
+          - Name: AVAILABILITY_ZONE
+            Type: PLAINTEXT
+            Value:
+              Ref: AvailabilityZone
+          - Name: ALLOWED_SSH_CIDR
+            Type: PLAINTEXT
+            Value:
+              Ref: AllowedSshCidr
+          - Name: KEY_NAME
+            Type: PLAINTEXT
+            Value:
+              Ref: KeyName
+          - Name: INSTANCE_TYPE
+            Type: PLAINTEXT
+            Value:
+              Ref: InstanceType
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: ci/buildspec-deploy.yml
+      TimeoutInMinutes: 60
+      Tags:
+        - Key: Project
+          Value:
+            Ref: ProjectName
+        - Key: Environment
+          Value:
+            Ref: Environment
+
+  DeliveryPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name:
+        Fn::Sub: ${ProjectName}-cloudformation-pipeline
+      RoleArn:
+        Fn::GetAtt:
+          - CodePipelineRole
+          - Arn
+      ArtifactStore:
+        Type: S3
+        Location:
+          Ref: ArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: CodeCommitSource
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: "1"
+              Configuration:
+                RepositoryName:
+                  Ref: RepositoryName
+                BranchName:
+                  Ref: BranchName
+                PollForSourceChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput
+              RunOrder: 1
+        - Name: Validate
+          Actions:
+            - Name: CfnLintAndTaskCat
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName:
+                  Ref: ValidateProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: ValidatedSource
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: DeployCloudFormation
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName:
+                  Ref: DeployProject
+              InputArtifacts:
+                - Name: ValidatedSource
+              RunOrder: 1
+
+Outputs:
+  RepositoryCloneUrlHttp:
+    Description: HTTPS clone URL of the created CodeCommit repository.
+    Value:
+      Fn::GetAtt:
+        - SourceRepository
+        - CloneUrlHttp
+  PipelineName:
+    Description: Created CodePipeline name.
+    Value:
+      Ref: DeliveryPipeline
+  ArtifactBucketName:
+    Description: S3 artifact bucket used by CodePipeline and CloudFormation package.
+    Value:
+      Ref: ArtifactBucket

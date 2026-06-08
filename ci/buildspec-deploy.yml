@@ -1,0 +1,24 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - aws cloudformation package --template-file cloudformation/root.yaml --s3-bucket "$ARTIFACT_BUCKET" --output-template-file packaged.yaml
+      - >
+        aws cloudformation deploy
+        --template-file packaged.yaml
+        --stack-name "$INFRA_STACK_NAME"
+        --parameter-overrides
+        ProjectName="$PROJECT_NAME"
+        Environment="$ENVIRONMENT"
+        VpcCidr="$VPC_CIDR"
+        PublicSubnetCidr="$PUBLIC_SUBNET_CIDR"
+        PrivateSubnetCidr="$PRIVATE_SUBNET_CIDR"
+        AvailabilityZone="$AVAILABILITY_ZONE"
+        AllowedSshCidr="$ALLOWED_SSH_CIDR"
+        KeyName="$KEY_NAME"
+        InstanceType="$INSTANCE_TYPE"
+        --capabilities CAPABILITY_AUTO_EXPAND
+  post_build:
+    commands:
+      - aws cloudformation describe-stacks --stack-name "$INFRA_STACK_NAME" --query "Stacks[0].Outputs" --output table

@@ -1,0 +1,19 @@
+# Local parameters and generated artifacts
+parameters.json
+packaged.yaml
+cloudformation/packaged.yaml
+
+# TaskCat runtime output
+.taskcat/
+taskcat_outputs/
+
+# Local credentials
+*.pem
+*.ppk
+.aws/
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
