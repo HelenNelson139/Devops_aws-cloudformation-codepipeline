@@ -5,10 +5,8 @@ phases:
     commands:
       - python3 -m venv /opt/citools
       - /opt/citools/bin/pip install --upgrade pip
-      - /opt/citools/bin/pip install --force-reinstall setuptools wheel
       - /opt/citools/bin/pip install cfn-lint taskcat
-      # Verify pkg_resources is accessible before running taskcat
-      - /opt/citools/bin/python -c "import pkg_resources; print('pkg_resources OK:', pkg_resources.__version__)"
+      - /opt/citools/bin/python ci/create_pkg_resources_shim.py
   build:
     commands:
       - /opt/citools/bin/cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml --ignore-checks W3002
