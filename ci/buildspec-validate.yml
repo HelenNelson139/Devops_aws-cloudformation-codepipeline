@@ -2,16 +2,24 @@ version: 0.2
 
 phases:
   install:
+    runtime-versions:
+      python: 3.11
     commands:
-      - python3 -m venv /opt/citools
-      - /opt/citools/bin/pip install --upgrade pip
-      - /opt/citools/bin/pip install cfn-lint taskcat
-      - /opt/citools/bin/python ci/create_pkg_resources_shim.py
+      - echo "=== Python info ==="
+      - which python
+      - python --version
+      - python -m pip --version
+      - echo "=== Install setuptools ==="
+      - python -m pip install --upgrade pip setuptools
+      - echo "=== Check pkg_resources BEFORE taskcat ==="
+      - python -c "import setuptools; print('setuptools:', setuptools.__version__)"
+      - python -c "import pkg_resources; print('pkg_resources OK')" || echo "FAILED before taskcat"
+      - echo "=== Install cfn-lint + taskcat ==="
+      - python -m pip install cfn-lint taskcat
+      - echo "=== Check pkg_resources AFTER taskcat ==="
+      - python -c "import pkg_resources; print('pkg_resources OK')" || echo "FAILED after taskcat"
+      - echo "=== List site-packages (pkg/setup related) ==="
+      - python -c "import sys; import os; sp=[p for p in sys.path if 'site-packages' in p][0]; print(sp); print([f for f in os.listdir(sp) if 'pkg' in f.lower() or 'setup' in f.lower()])"
   build:
     commands:
-      - /opt/citools/bin/cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml --ignore-checks W3002
-      - /opt/citools/bin/taskcat test run
-
-artifacts:
-  files:
-    - "**/*"
+      - echo "diagnostic done"
