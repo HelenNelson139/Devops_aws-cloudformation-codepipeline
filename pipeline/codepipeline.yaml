@@ -105,6 +105,7 @@ Resources:
                   - cloudformation:*
                   - ec2:*
                   - ssm:GetParameter
+                  - ssm:GetParameters
                   - iam:PassRole
                 Resource: "*"
 
