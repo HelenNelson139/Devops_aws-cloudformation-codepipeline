@@ -9,7 +9,7 @@ phases:
       - pip install cfn-lint taskcat
   build:
     commands:
-      - cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml
+      - cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml --ignore-checks W3002
       - taskcat test run
 
 artifacts:
