@@ -5,7 +5,7 @@ phases:
     runtime-versions:
       python: 3.11
     commands:
-      - python -m pip install --upgrade pip
+      - python -m pip install --upgrade pip setuptools
       - pip install cfn-lint taskcat
   build:
     commands:
