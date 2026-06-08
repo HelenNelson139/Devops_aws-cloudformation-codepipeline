@@ -101,19 +101,11 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - s3:CreateBucket
-                  - s3:DeleteBucket
-                  - s3:GetBucketLocation
-                  - s3:GetObject
-                  - s3:ListBucket
-                  - s3:PutObject
-                  - s3:DeleteObject
-                Resource: "*"
-              - Effect: Allow
-                Action:
+                  - s3:*
                   - cloudformation:*
                   - ec2:*
                   - ssm:GetParameter
+                  - ssm:GetParameters
                   - iam:PassRole
                 Resource: "*"
 
@@ -182,6 +174,11 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_BUCKET
+            Type: PLAINTEXT
+            Value:
+              Ref: ArtifactBucket
       Source:
         Type: CODEPIPELINE
         BuildSpec: ci/buildspec-validate.yml

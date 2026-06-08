@@ -6,10 +6,14 @@ phases:
       python: 3.11
     commands:
       - python -m pip install --upgrade pip
-      - pip install cfn-lint taskcat
+      # setuptools >= 70 khong con cai pkg_resources rieng, taskcat can pkg_resources
+      - python -m pip install "setuptools==65.5.0"
+      - python -m pip install cfn-lint taskcat
   build:
     commands:
-      - cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml
+      - cfn-lint cloudformation/root.yaml cloudformation/modules/*.yaml pipeline/codepipeline.yaml --ignore-checks W3002
+      # Package nested stack TemplateURLs tu relative sang absolute S3 URL
+      - aws cloudformation package --template-file cloudformation/root.yaml --s3-bucket "$ARTIFACT_BUCKET" --s3-prefix taskcat-pkg --output-template-file cloudformation/packaged-root.yaml
       - taskcat test run
 
 artifacts:
